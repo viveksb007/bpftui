@@ -6,11 +6,8 @@ require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/viveksb007/gobpftool v0.0.0-00010101000000-000000000000
+	github.com/viveksb007/gobpftool v0.0.0-20260114023147-1fcb1aac24e9
 )
-
-// Replace with local path - adjust path as needed
-replace github.com/viveksb007/gobpftool => ../gobpftool
 
 require (
 	github.com/atotto/clipboard v0.1.4 // indirect
