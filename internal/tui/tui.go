@@ -161,9 +161,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mapDetail.SetSize(msg.Width, msg.Height)
 		m.mapDump.SetSize(msg.Width, msg.Height)
 		return m, nil
+
+	default:
+		// Pass other messages (like FilterMatchesMsg) to the active sub-model
+		// This is necessary for async operations like list filtering to work
+		return m.handleOtherMsg(msg)
+	}
+}
+
+// handleOtherMsg passes non-key messages to the appropriate sub-model.
+// This is necessary for async operations like list filtering.
+func (m Model) handleOtherMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch m.state {
+	case ViewProgList:
+		m.progList, cmd, _ = m.progList.Update(msg)
+	case ViewMapList:
+		m.mapList, cmd, _ = m.mapList.Update(msg)
+	case ViewMapDump:
+		m.mapDump, cmd = m.mapDump.Update(msg)
 	}
 
-	return m, nil
+	return m, cmd
 }
 
 // handleKeyMsg processes keyboard input.
@@ -325,6 +345,9 @@ func (m Model) handleMapDumpKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // loadPrograms fetches programs from the service and updates the list.
 func (m *Model) loadPrograms() {
+	// Reset any existing filter when entering the list
+	m.progList.ResetFilter()
+
 	if m.progSvc == nil {
 		m.progList.SetPrograms([]ProgramInfo{})
 		return
@@ -341,6 +364,9 @@ func (m *Model) loadPrograms() {
 
 // loadMaps fetches maps from the service and updates the list.
 func (m *Model) loadMaps() {
+	// Reset any existing filter when entering the list
+	m.mapList.ResetFilter()
+
 	if m.mapsSvc == nil {
 		m.mapList.SetMaps([]MapInfo{})
 		return

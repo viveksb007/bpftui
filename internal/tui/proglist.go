@@ -138,3 +138,8 @@ func (m progListModel) SelectedItem() *ProgramInfo {
 func (m progListModel) IsFiltering() bool {
 	return m.list.FilterState() == list.Filtering
 }
+
+// ResetFilter clears any active filter and restores the full list.
+func (m *progListModel) ResetFilter() {
+	m.list.ResetFilter()
+}

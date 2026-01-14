@@ -139,3 +139,8 @@ func (m mapListModel) SelectedItem() *MapInfo {
 func (m mapListModel) IsFiltering() bool {
 	return m.list.FilterState() == list.Filtering
 }
+
+// ResetFilter clears any active filter and restores the full list.
+func (m *mapListModel) ResetFilter() {
+	m.list.ResetFilter()
+}

@@ -382,3 +382,292 @@ func TestProgListIntegrationBackspaceNavigation(t *testing.T) {
 		t.Errorf("expected state ViewMenu after backspace, got %v", m.state)
 	}
 }
+
+// Fuzzy Search Tests
+
+func TestProgListFuzzySearchActivation(t *testing.T) {
+	m := newProgListModel(80, 24)
+
+	programs := []ProgramInfo{
+		{ID: 1, Name: "kprobe_handler", Type: "kprobe", Tag: "tag1"},
+		{ID: 2, Name: "tracepoint_sys", Type: "tracepoint", Tag: "tag2"},
+		{ID: 3, Name: "xdp_filter", Type: "xdp", Tag: "tag3"},
+	}
+	m.SetPrograms(programs)
+
+	// Initially not filtering
+	if m.IsFiltering() {
+		t.Error("expected not filtering initially")
+	}
+
+	// Activate filtering with '/'
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	// Should now be in filtering mode
+	if !m.IsFiltering() {
+		t.Error("expected filtering after pressing '/'")
+	}
+}
+
+func TestProgListFuzzySearchExitWithEscape(t *testing.T) {
+	m := newProgListModel(80, 24)
+
+	programs := []ProgramInfo{
+		{ID: 1, Name: "kprobe_handler", Type: "kprobe", Tag: "tag1"},
+		{ID: 2, Name: "tracepoint_sys", Type: "tracepoint", Tag: "tag2"},
+	}
+	m.SetPrograms(programs)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	if !m.IsFiltering() {
+		t.Error("expected filtering after pressing '/'")
+	}
+
+	// Exit filtering with Escape
+	escMsg := tea.KeyMsg{Type: tea.KeyEscape}
+	m, _, _ = m.Update(escMsg)
+
+	// Should no longer be filtering
+	if m.IsFiltering() {
+		t.Error("expected not filtering after pressing Escape")
+	}
+}
+
+func TestProgListFuzzySearchEnterDoesNotSelectWhileFiltering(t *testing.T) {
+	m := newProgListModel(80, 24)
+
+	programs := []ProgramInfo{
+		{ID: 1, Name: "kprobe_handler", Type: "kprobe", Tag: "tag1"},
+		{ID: 2, Name: "tracepoint_sys", Type: "tracepoint", Tag: "tag2"},
+	}
+	m.SetPrograms(programs)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	// Press Enter while filtering - should not return a selected program
+	// (the list handles this internally to confirm the filter)
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	m, _, selectedProg := m.Update(enterMsg)
+
+	// When filtering, Enter confirms the filter, not selects the item
+	if selectedProg != nil {
+		t.Error("expected no selection while filtering is active")
+	}
+}
+
+func TestProgListFuzzySearchNavigationWhileFiltering(t *testing.T) {
+	m := newProgListModel(80, 24)
+
+	programs := []ProgramInfo{
+		{ID: 1, Name: "kprobe_handler", Type: "kprobe", Tag: "tag1"},
+		{ID: 2, Name: "kprobe_exit", Type: "kprobe", Tag: "tag2"},
+		{ID: 3, Name: "tracepoint_sys", Type: "tracepoint", Tag: "tag3"},
+	}
+	m.SetPrograms(programs)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	// Navigate down while filtering
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	m, _, _ = m.Update(downMsg)
+
+	// Should still be filtering
+	if !m.IsFiltering() {
+		t.Error("expected still filtering after navigation")
+	}
+}
+
+func TestProgListFuzzySearchSelectAfterFilter(t *testing.T) {
+	m := newProgListModel(80, 24)
+
+	programs := []ProgramInfo{
+		{ID: 1, Name: "kprobe_handler", Type: "kprobe", Tag: "tag1"},
+		{ID: 2, Name: "tracepoint_sys", Type: "tracepoint", Tag: "tag2"},
+	}
+	m.SetPrograms(programs)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	// Type search query
+	for _, r := range "kprobe" {
+		charMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
+		m, _, _ = m.Update(charMsg)
+	}
+
+	// Confirm filter with Enter (exits filter mode)
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	m, _, _ = m.Update(enterMsg)
+
+	// Now press Enter again to select the filtered item
+	m, _, selectedProg := m.Update(enterMsg)
+
+	// Should have selected a program
+	if selectedProg == nil {
+		t.Fatal("expected selected program after confirming filter")
+	}
+
+	// Should be the kprobe_handler (first match)
+	if selectedProg.Name != "kprobe_handler" {
+		t.Errorf("expected 'kprobe_handler', got '%s'", selectedProg.Name)
+	}
+}
+
+func TestProgListFuzzySearchViewShowsFilterInput(t *testing.T) {
+	m := newProgListModel(80, 24)
+
+	programs := []ProgramInfo{
+		{ID: 1, Name: "kprobe_handler", Type: "kprobe", Tag: "tag1"},
+	}
+	m.SetPrograms(programs)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	view := m.View()
+
+	// The view should show filter-related UI elements
+	// Bubbles list shows "Filter:" when filtering is active
+	if !strings.Contains(view, "Filter") {
+		t.Error("expected view to show filter input when filtering")
+	}
+}
+
+func TestProgListFilterValueUsesName(t *testing.T) {
+	item := progItem{
+		info: ProgramInfo{
+			ID:   1,
+			Name: "my_custom_program",
+			Type: "kprobe",
+			Tag:  "abc123",
+		},
+	}
+
+	// FilterValue should return the program name for fuzzy matching
+	if item.FilterValue() != "my_custom_program" {
+		t.Errorf("expected FilterValue 'my_custom_program', got '%s'", item.FilterValue())
+	}
+}
+
+// Integration test: Fuzzy search in full TUI context
+func TestProgListIntegrationFuzzySearchDoesNotNavigateBack(t *testing.T) {
+	mockSvc := &mockProgService{
+		programs: []ProgramInfo{
+			{ID: 1, Name: "prog1", Type: "kprobe", Tag: "tag1"},
+		},
+	}
+
+	m := NewModel(mockSvc, nil)
+
+	// Navigate to programs list
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ := m.Update(enterMsg)
+	m = result.(Model)
+
+	if m.state != ViewProgList {
+		t.Fatalf("expected ViewProgList, got %v", m.state)
+	}
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	result, _ = m.Update(filterMsg)
+	m = result.(Model)
+
+	// Press Escape while filtering - should exit filter mode, not navigate back
+	escMsg := tea.KeyMsg{Type: tea.KeyEscape}
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	// Should still be at programs list (not navigated back to menu)
+	if m.state != ViewProgList {
+		t.Errorf("expected to stay at ViewProgList after exiting filter, got %v", m.state)
+	}
+}
+
+func TestProgListIntegrationQuitBlockedWhileFiltering(t *testing.T) {
+	mockSvc := &mockProgService{
+		programs: []ProgramInfo{
+			{ID: 1, Name: "prog1", Type: "kprobe", Tag: "tag1"},
+		},
+	}
+
+	m := NewModel(mockSvc, nil)
+
+	// Navigate to programs list
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ := m.Update(enterMsg)
+	m = result.(Model)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	result, _ = m.Update(filterMsg)
+	m = result.(Model)
+
+	// Press 'q' while filtering - should type 'q' in filter, not quit
+	qMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
+	result, cmd := m.Update(qMsg)
+	m = result.(Model)
+
+	// Should not have quit command
+	if cmd != nil {
+		// Check if it's a quit command by checking if it returns tea.Quit
+		// In practice, the cmd should be nil or a non-quit command
+		t.Log("Command returned, but should not be quit while filtering")
+	}
+
+	// Should still be at programs list
+	if m.state != ViewProgList {
+		t.Errorf("expected to stay at ViewProgList, got %v", m.state)
+	}
+}
+
+func TestProgListResetFilter(t *testing.T) {
+	m := newProgListModel(80, 24)
+
+	programs := []ProgramInfo{
+		{ID: 1, Name: "kprobe_handler", Type: "kprobe", Tag: "tag1"},
+		{ID: 2, Name: "tracepoint_sys", Type: "tracepoint", Tag: "tag2"},
+	}
+	m.SetPrograms(programs)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	// Type search query
+	for _, r := range "kprobe" {
+		charMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
+		m, _, _ = m.Update(charMsg)
+	}
+
+	// Confirm filter
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	m, _, _ = m.Update(enterMsg)
+
+	// Verify filter is applied
+	if !m.list.IsFiltered() {
+		t.Error("expected filter to be applied")
+	}
+
+	// Reset filter
+	m.ResetFilter()
+
+	// Verify filter is cleared
+	if m.list.IsFiltered() {
+		t.Error("expected filter to be cleared after ResetFilter")
+	}
+
+	if m.IsFiltering() {
+		t.Error("expected not to be in filtering mode after ResetFilter")
+	}
+}

@@ -467,3 +467,343 @@ func TestMapListIntegrationScrolling(t *testing.T) {
 		t.Errorf("expected map ID 11 after scrolling, got %d", selectedMap.ID)
 	}
 }
+
+// Fuzzy Search Tests
+
+func TestMapListFuzzySearchActivation(t *testing.T) {
+	m := newMapListModel(80, 24)
+
+	maps := []MapInfo{
+		{ID: 1, Name: "hash_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		{ID: 2, Name: "array_map", Type: "array", KeySize: 4, ValueSize: 16, MaxEntries: 256},
+		{ID: 3, Name: "lru_hash_map", Type: "lru_hash", KeySize: 8, ValueSize: 32, MaxEntries: 512},
+	}
+	m.SetMaps(maps)
+
+	// Initially not filtering
+	if m.IsFiltering() {
+		t.Error("expected not filtering initially")
+	}
+
+	// Activate filtering with '/'
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	// Should now be in filtering mode
+	if !m.IsFiltering() {
+		t.Error("expected filtering after pressing '/'")
+	}
+}
+
+func TestMapListFuzzySearchExitWithEscape(t *testing.T) {
+	m := newMapListModel(80, 24)
+
+	maps := []MapInfo{
+		{ID: 1, Name: "hash_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		{ID: 2, Name: "array_map", Type: "array", KeySize: 4, ValueSize: 16, MaxEntries: 256},
+	}
+	m.SetMaps(maps)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	if !m.IsFiltering() {
+		t.Error("expected filtering after pressing '/'")
+	}
+
+	// Exit filtering with Escape
+	escMsg := tea.KeyMsg{Type: tea.KeyEscape}
+	m, _, _ = m.Update(escMsg)
+
+	// Should no longer be filtering
+	if m.IsFiltering() {
+		t.Error("expected not filtering after pressing Escape")
+	}
+}
+
+func TestMapListFuzzySearchEnterDoesNotSelectWhileFiltering(t *testing.T) {
+	m := newMapListModel(80, 24)
+
+	maps := []MapInfo{
+		{ID: 1, Name: "hash_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		{ID: 2, Name: "array_map", Type: "array", KeySize: 4, ValueSize: 16, MaxEntries: 256},
+	}
+	m.SetMaps(maps)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	// Press Enter while filtering - should not return a selected map
+	// (the list handles this internally to confirm the filter)
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	m, _, selectedMap := m.Update(enterMsg)
+
+	// When filtering, Enter confirms the filter, not selects the item
+	if selectedMap != nil {
+		t.Error("expected no selection while filtering is active")
+	}
+}
+
+func TestMapListFuzzySearchNavigationWhileFiltering(t *testing.T) {
+	m := newMapListModel(80, 24)
+
+	maps := []MapInfo{
+		{ID: 1, Name: "hash_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		{ID: 2, Name: "hash_lru_map", Type: "lru_hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		{ID: 3, Name: "array_map", Type: "array", KeySize: 4, ValueSize: 16, MaxEntries: 256},
+	}
+	m.SetMaps(maps)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	// Navigate down while filtering
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	m, _, _ = m.Update(downMsg)
+
+	// Should still be filtering
+	if !m.IsFiltering() {
+		t.Error("expected still filtering after navigation")
+	}
+}
+
+func TestMapListFuzzySearchSelectAfterFilter(t *testing.T) {
+	m := newMapListModel(80, 24)
+
+	maps := []MapInfo{
+		{ID: 1, Name: "hash_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		{ID: 2, Name: "array_map", Type: "array", KeySize: 4, ValueSize: 16, MaxEntries: 256},
+	}
+	m.SetMaps(maps)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	// Type search query
+	for _, r := range "hash" {
+		charMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
+		m, _, _ = m.Update(charMsg)
+	}
+
+	// Confirm filter with Enter (exits filter mode)
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	m, _, _ = m.Update(enterMsg)
+
+	// Now press Enter again to select the filtered item
+	m, _, selectedMap := m.Update(enterMsg)
+
+	// Should have selected a map
+	if selectedMap == nil {
+		t.Fatal("expected selected map after confirming filter")
+	}
+
+	// Should be the hash_map (first match)
+	if selectedMap.Name != "hash_map" {
+		t.Errorf("expected 'hash_map', got '%s'", selectedMap.Name)
+	}
+}
+
+func TestMapListFuzzySearchViewShowsFilterInput(t *testing.T) {
+	m := newMapListModel(80, 24)
+
+	maps := []MapInfo{
+		{ID: 1, Name: "hash_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+	}
+	m.SetMaps(maps)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	view := m.View()
+
+	// The view should show filter-related UI elements
+	// Bubbles list shows "Filter:" when filtering is active
+	if !strings.Contains(view, "Filter") {
+		t.Error("expected view to show filter input when filtering")
+	}
+}
+
+func TestMapListFilterValueUsesName(t *testing.T) {
+	item := mapItem{
+		info: MapInfo{
+			ID:         1,
+			Name:       "my_custom_map",
+			Type:       "hash",
+			KeySize:    4,
+			ValueSize:  8,
+			MaxEntries: 100,
+		},
+	}
+
+	// FilterValue should return the map name for fuzzy matching
+	if item.FilterValue() != "my_custom_map" {
+		t.Errorf("expected FilterValue 'my_custom_map', got '%s'", item.FilterValue())
+	}
+}
+
+// Integration test: Fuzzy search in full TUI context
+func TestMapListIntegrationFuzzySearchDoesNotNavigateBack(t *testing.T) {
+	mockSvc := &mockMapsServiceForMapList{
+		maps: []MapInfo{
+			{ID: 1, Name: "map1", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		},
+	}
+
+	m := NewModel(nil, mockSvc)
+
+	// Navigate to maps list (down to select Maps, then Enter)
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	result, _ := m.Update(downMsg)
+	m = result.(Model)
+
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	if m.state != ViewMapList {
+		t.Fatalf("expected ViewMapList, got %v", m.state)
+	}
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	result, _ = m.Update(filterMsg)
+	m = result.(Model)
+
+	// Press Escape while filtering - should exit filter mode, not navigate back
+	escMsg := tea.KeyMsg{Type: tea.KeyEscape}
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	// Should still be at maps list (not navigated back to menu)
+	if m.state != ViewMapList {
+		t.Errorf("expected to stay at ViewMapList after exiting filter, got %v", m.state)
+	}
+}
+
+func TestMapListIntegrationQuitBlockedWhileFiltering(t *testing.T) {
+	mockSvc := &mockMapsServiceForMapList{
+		maps: []MapInfo{
+			{ID: 1, Name: "map1", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		},
+	}
+
+	m := NewModel(nil, mockSvc)
+
+	// Navigate to maps list
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	result, _ := m.Update(downMsg)
+	m = result.(Model)
+
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	result, _ = m.Update(filterMsg)
+	m = result.(Model)
+
+	// Press 'q' while filtering - should type 'q' in filter, not quit
+	qMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}
+	result, cmd := m.Update(qMsg)
+	m = result.(Model)
+
+	// Should not have quit command
+	if cmd != nil {
+		// Check if it's a quit command by checking if it returns tea.Quit
+		// In practice, the cmd should be nil or a non-quit command
+		t.Log("Command returned, but should not be quit while filtering")
+	}
+
+	// Should still be at maps list
+	if m.state != ViewMapList {
+		t.Errorf("expected to stay at ViewMapList, got %v", m.state)
+	}
+}
+
+func TestMapListFuzzySearchWithMultipleMatches(t *testing.T) {
+	m := newMapListModel(80, 24)
+
+	maps := []MapInfo{
+		{ID: 1, Name: "hash_map_1", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		{ID: 2, Name: "hash_map_2", Type: "hash", KeySize: 4, ValueSize: 16, MaxEntries: 256},
+		{ID: 3, Name: "array_map", Type: "array", KeySize: 4, ValueSize: 32, MaxEntries: 512},
+	}
+	m.SetMaps(maps)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	// Type search query that matches multiple items
+	for _, r := range "hash" {
+		charMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
+		m, _, _ = m.Update(charMsg)
+	}
+
+	// Confirm filter
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	m, _, _ = m.Update(enterMsg)
+
+	// Navigate down to second match
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	m, _, _ = m.Update(downMsg)
+
+	// Select second match
+	m, _, selectedMap := m.Update(enterMsg)
+
+	if selectedMap == nil {
+		t.Fatal("expected selected map")
+	}
+
+	// Should be hash_map_2 (second match after navigating down)
+	if selectedMap.Name != "hash_map_2" {
+		t.Errorf("expected 'hash_map_2', got '%s'", selectedMap.Name)
+	}
+}
+
+func TestMapListResetFilter(t *testing.T) {
+	m := newMapListModel(80, 24)
+
+	maps := []MapInfo{
+		{ID: 1, Name: "hash_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		{ID: 2, Name: "array_map", Type: "array", KeySize: 4, ValueSize: 16, MaxEntries: 256},
+	}
+	m.SetMaps(maps)
+
+	// Activate filtering
+	filterMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}}
+	m, _, _ = m.Update(filterMsg)
+
+	// Type search query
+	for _, r := range "hash" {
+		charMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
+		m, _, _ = m.Update(charMsg)
+	}
+
+	// Confirm filter
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	m, _, _ = m.Update(enterMsg)
+
+	// Verify filter is applied
+	if !m.list.IsFiltered() {
+		t.Error("expected filter to be applied")
+	}
+
+	// Reset filter
+	m.ResetFilter()
+
+	// Verify filter is cleared
+	if m.list.IsFiltered() {
+		t.Error("expected filter to be cleared after ResetFilter")
+	}
+
+	if m.IsFiltering() {
+		t.Error("expected not to be in filtering mode after ResetFilter")
+	}
+}

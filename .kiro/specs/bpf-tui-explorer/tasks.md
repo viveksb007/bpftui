@@ -92,8 +92,8 @@
   - Write unit tests for hex formatting and error handling
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6_
 
-- [ ] 9. Implement fuzzy search
-  - [ ] 9.1 Add fuzzy search to programs list
+- [x] 9. Implement fuzzy search
+  - [x] 9.1 Add fuzzy search to programs list
     - Enable Bubbles list.Model built-in filtering with `/` key
     - Display search input field when active
     - Filter list in real-time using fuzzy matching
@@ -103,7 +103,7 @@
     - Display "No matches found" when no results
     - _Requirements: 7.1, 7.2, 7.3, 7.5, 7.6, 7.7, 7.8_
 
-  - [ ] 9.2 Add fuzzy search to maps list
+  - [x] 9.2 Add fuzzy search to maps list
     - Enable same fuzzy search functionality for maps list
     - Write unit tests for search filtering behavior
     - _Requirements: 7.1, 7.2, 7.3, 7.5, 7.6, 7.7, 7.8_
