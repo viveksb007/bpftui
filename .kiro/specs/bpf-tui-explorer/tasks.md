@@ -108,7 +108,7 @@
     - Write unit tests for search filtering behavior
     - _Requirements: 7.1, 7.2, 7.3, 7.5, 7.6, 7.7, 7.8_
 
-- [ ] 10. Implement help system
+- [x] 10. Implement help system
   - Add help bar at bottom of each view showing context-appropriate shortcuts
   - Implement help overlay triggered by `?` key
   - Close help overlay on any key press

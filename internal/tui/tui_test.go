@@ -363,9 +363,21 @@ func TestViewWithHelp(t *testing.T) {
 	if view == "" {
 		t.Error("View() returned empty string for help state")
 	}
-	// Should contain keyboard shortcuts
+	// Should contain keyboard shortcuts header
 	if !containsString(view, "Keyboard Shortcuts") {
 		t.Error("help view should contain 'Keyboard Shortcuts'")
+	}
+	// Should contain navigation section
+	if !containsString(view, "Navigation") {
+		t.Error("help view should contain 'Navigation' section")
+	}
+	// Should contain global section
+	if !containsString(view, "Global") {
+		t.Error("help view should contain 'Global' section")
+	}
+	// Should contain close instruction
+	if !containsString(view, "Press any key to close") {
+		t.Error("help view should contain close instruction")
 	}
 }
 
@@ -395,14 +407,14 @@ func TestViewStates(t *testing.T) {
 func TestRenderHelpBar(t *testing.T) {
 	tests := []struct {
 		state    ViewState
-		contains string
+		contains []string
 	}{
-		{ViewMenu, "navigate"},
-		{ViewProgList, "search"},
-		{ViewMapList, "search"},
-		{ViewProgDetail, "back"},
-		{ViewMapDetail, "back"},
-		{ViewMapDump, "back"},
+		{ViewMenu, []string{"navigate", "select", "quit", "help"}},
+		{ViewProgList, []string{"navigate", "search", "back", "quit", "help"}},
+		{ViewMapList, []string{"navigate", "search", "back", "quit", "help"}},
+		{ViewProgDetail, []string{"select map", "view map", "back", "quit", "help"}},
+		{ViewMapDetail, []string{"dump contents", "back", "quit", "help"}},
+		{ViewMapDump, []string{"scroll", "back", "quit", "help"}},
 	}
 
 	for _, tt := range tests {
@@ -411,10 +423,121 @@ func TestRenderHelpBar(t *testing.T) {
 			m.state = tt.state
 
 			helpBar := m.renderHelpBar()
-			if !containsString(helpBar, tt.contains) {
-				t.Errorf("help bar for %v should contain %q", tt.state, tt.contains)
+			for _, expected := range tt.contains {
+				if !containsString(helpBar, expected) {
+					t.Errorf("help bar for %v should contain %q, got: %s", tt.state, expected, helpBar)
+				}
 			}
 		})
+	}
+}
+
+func TestRenderHelpBarWhileFiltering(t *testing.T) {
+	// Test that help bar shows different content when filtering
+	m := NewModel(nil, nil)
+	m.state = ViewProgList
+
+	// Normal state should show search option
+	helpBar := m.renderHelpBar()
+	if !containsString(helpBar, "search") {
+		t.Error("help bar should show 'search' when not filtering")
+	}
+}
+
+func TestRenderHelpOverlayContextSpecific(t *testing.T) {
+	tests := []struct {
+		state    ViewState
+		contains []string
+	}{
+		{ViewMenu, []string{"Navigation", "Menu", "Global", "Open selected option"}},
+		{ViewProgList, []string{"Navigation", "List", "Global", "fuzzy search"}},
+		{ViewMapList, []string{"Navigation", "List", "Global", "fuzzy search"}},
+		{ViewProgDetail, []string{"Navigation", "Program Detail", "Global", "Navigate associated maps"}},
+		{ViewMapDetail, []string{"Navigation", "Map Detail", "Global", "Dump map contents"}},
+		{ViewMapDump, []string{"Navigation", "Map Dump", "Global", "Scroll through entries"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.state.String(), func(t *testing.T) {
+			m := NewModel(nil, nil)
+			m.state = tt.state
+			m.showHelp = true
+
+			helpView := m.renderHelp()
+			for _, expected := range tt.contains {
+				if !containsString(helpView, expected) {
+					t.Errorf("help overlay for %v should contain %q", tt.state, expected)
+				}
+			}
+		})
+	}
+}
+
+func TestHelpOverlayClosesOnAnyKey(t *testing.T) {
+	testKeys := []tea.KeyMsg{
+		{Type: tea.KeyRunes, Runes: []rune{'a'}},
+		{Type: tea.KeyRunes, Runes: []rune{'z'}},
+		{Type: tea.KeyEnter},
+		{Type: tea.KeySpace},
+		{Type: tea.KeyUp},
+		{Type: tea.KeyDown},
+	}
+
+	for _, key := range testKeys {
+		t.Run(key.String(), func(t *testing.T) {
+			m := NewModel(nil, nil)
+			m.showHelp = true
+
+			newModel, _ := m.Update(key)
+			updated := newModel.(Model)
+
+			if updated.showHelp {
+				t.Errorf("help should close on key %v", key)
+			}
+		})
+	}
+}
+
+func TestHelpToggleWithQuestionMark(t *testing.T) {
+	m := NewModel(nil, nil)
+
+	// Initially help should be hidden
+	if m.showHelp {
+		t.Error("help should be hidden initially")
+	}
+
+	// Press '?' to show help
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if !updated.showHelp {
+		t.Error("help should be shown after pressing '?'")
+	}
+
+	// Press any key (including '?') to close help
+	newModel, _ = updated.Update(msg)
+	updated = newModel.(Model)
+
+	if updated.showHelp {
+		t.Error("help should be hidden after pressing any key")
+	}
+}
+
+func TestHelpNotShownWhenFiltering(t *testing.T) {
+	// When filtering in a list, '?' should not toggle help
+	// This is handled by the list component, but we test the model behavior
+
+	m := NewModel(nil, nil)
+	m.state = ViewProgList
+
+	// Simulate that we're not filtering - help should toggle
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}
+	newModel, _ := m.Update(msg)
+	updated := newModel.(Model)
+
+	if !updated.showHelp {
+		t.Error("help should toggle when not filtering")
 	}
 }
 

@@ -454,18 +454,52 @@ func (m Model) renderError() string {
 	return errorStyle.Render(fmt.Sprintf("Error: %v\n\nPress 'q' to quit.", m.err))
 }
 
-// renderHelp displays the help overlay.
+// renderHelp displays the help overlay with context-appropriate shortcuts.
 func (m Model) renderHelp() string {
-	help := titleStyle.Render("Keyboard Shortcuts") + "\n\n"
-	help += helpStyle.Render("↑/k      - Move up\n")
-	help += helpStyle.Render("↓/j      - Move down\n")
-	help += helpStyle.Render("Enter    - Select\n")
-	help += helpStyle.Render("Esc      - Go back\n")
-	help += helpStyle.Render("/        - Search\n")
-	help += helpStyle.Render("?        - Toggle help\n")
-	help += helpStyle.Render("q        - Quit\n")
-	help += "\n" + dimStyle.Render("Press any key to close")
-	return help
+	var content string
+
+	content += "Navigation:\n"
+	content += "  ↑/k      Move up\n"
+	content += "  ↓/j      Move down\n"
+	content += "  Enter    Select\n"
+
+	// Context-specific shortcuts
+	switch m.state {
+	case ViewMenu:
+		content += "\nMenu:\n"
+		content += "  Enter    Open selected option\n"
+
+	case ViewProgList, ViewMapList:
+		content += "\nList:\n"
+		content += "  /        Start fuzzy search\n"
+		content += "  Esc      Exit search / Go back\n"
+		content += "  Enter    View details\n"
+
+	case ViewProgDetail:
+		content += "\nProgram Detail:\n"
+		content += "  ↑/↓      Navigate associated maps\n"
+		content += "  Enter    View selected map\n"
+		content += "  Esc      Go back to list\n"
+
+	case ViewMapDetail:
+		content += "\nMap Detail:\n"
+		content += "  Enter    Dump map contents\n"
+		content += "  Esc      Go back\n"
+
+	case ViewMapDump:
+		content += "\nMap Dump:\n"
+		content += "  ↑/↓      Scroll through entries\n"
+		content += "  Esc      Go back to map detail\n"
+	}
+
+	// Global shortcuts
+	content += "\nGlobal:\n"
+	content += "  ?        Toggle this help\n"
+	content += "  q        Quit application\n"
+
+	return titleStyle.Render("Keyboard Shortcuts") + "\n\n" +
+		helpStyle.Render(content) + "\n" +
+		dimStyle.Render("Press any key to close")
 }
 
 // renderMenu displays the main menu.
@@ -505,7 +539,19 @@ func (m Model) renderHelpBar() string {
 	case ViewMenu:
 		shortcuts = "↑/↓: navigate • enter: select • q: quit • ?: help"
 	case ViewProgList, ViewMapList:
-		shortcuts = "↑/↓: navigate • enter: select • /: search • esc: back • q: quit • ?: help"
+		if m.state == ViewProgList && m.progList.IsFiltering() {
+			shortcuts = "↑/↓: navigate • enter: select • esc: cancel search"
+		} else if m.state == ViewMapList && m.mapList.IsFiltering() {
+			shortcuts = "↑/↓: navigate • enter: select • esc: cancel search"
+		} else {
+			shortcuts = "↑/↓: navigate • enter: select • /: search • esc: back • q: quit • ?: help"
+		}
+	case ViewProgDetail:
+		shortcuts = "↑/↓: select map • enter: view map • esc: back • q: quit • ?: help"
+	case ViewMapDetail:
+		shortcuts = "enter: dump contents • esc: back • q: quit • ?: help"
+	case ViewMapDump:
+		shortcuts = "↑/↓: scroll • esc: back • q: quit • ?: help"
 	default:
 		shortcuts = "↑/↓: navigate • enter: select • esc: back • q: quit • ?: help"
 	}
