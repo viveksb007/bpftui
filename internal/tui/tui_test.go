@@ -965,3 +965,535 @@ func (m *mockMapsServiceWithDump) Dump(id uint32) ([]MapEntry, error) {
 	}
 	return m.entries, nil
 }
+
+// ============================================================================
+// Integration Tests for Full Navigation Flow
+// ============================================================================
+
+// TestIntegrationFullNavigationFlowMenuToMapDumpAndBack tests the complete
+// navigation flow: Menu → MapList → MapDetail → MapDump → Back → Back → Back → Menu
+func TestIntegrationFullNavigationFlowMenuToMapDumpAndBack(t *testing.T) {
+	// Create mock services with test data
+	mockMapsSvc := &mockMapsServiceWithDump{
+		maps: []MapInfo{
+			{ID: 1, Name: "test_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		},
+		entries: []MapEntry{
+			{Key: []byte{0x01, 0x02}, Value: []byte{0x0a, 0x0b}},
+		},
+	}
+
+	m := NewModel(nil, mockMapsSvc)
+
+	// Verify starting at Menu
+	if m.state != ViewMenu {
+		t.Fatalf("expected ViewMenu, got %v", m.state)
+	}
+
+	// Navigate to Maps list (down to select Maps, then Enter)
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	result, _ := m.Update(downMsg)
+	m = result.(Model)
+
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Verify at MapList
+	if m.state != ViewMapList {
+		t.Fatalf("expected ViewMapList, got %v", m.state)
+	}
+	if m.historyLen() != 1 {
+		t.Errorf("history length = %d, want 1", m.historyLen())
+	}
+
+	// Select the map to go to MapDetail
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Verify at MapDetail
+	if m.state != ViewMapDetail {
+		t.Fatalf("expected ViewMapDetail, got %v", m.state)
+	}
+	if m.historyLen() != 2 {
+		t.Errorf("history length = %d, want 2", m.historyLen())
+	}
+
+	// Navigate to MapDump
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Verify at MapDump
+	if m.state != ViewMapDump {
+		t.Fatalf("expected ViewMapDump, got %v", m.state)
+	}
+	if m.historyLen() != 3 {
+		t.Errorf("history length = %d, want 3", m.historyLen())
+	}
+
+	// Verify dump content is displayed
+	view := m.View()
+	if !containsString(view, "01 02") {
+		t.Error("map dump should display key in hex format")
+	}
+	if !containsString(view, "0a 0b") {
+		t.Error("map dump should display value in hex format")
+	}
+
+	// Navigate back to MapDetail
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	if m.state != ViewMapDetail {
+		t.Fatalf("expected ViewMapDetail after back, got %v", m.state)
+	}
+	if m.historyLen() != 2 {
+		t.Errorf("history length = %d, want 2", m.historyLen())
+	}
+
+	// Navigate back to MapList
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	if m.state != ViewMapList {
+		t.Fatalf("expected ViewMapList after back, got %v", m.state)
+	}
+	if m.historyLen() != 1 {
+		t.Errorf("history length = %d, want 1", m.historyLen())
+	}
+
+	// Navigate back to Menu
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	if m.state != ViewMenu {
+		t.Fatalf("expected ViewMenu after back, got %v", m.state)
+	}
+	if m.historyLen() != 0 {
+		t.Errorf("history length = %d, want 0", m.historyLen())
+	}
+}
+
+// TestIntegrationFullNavigationFlowMenuToProgDetailAndBack tests the complete
+// navigation flow: Menu → ProgList → ProgDetail → Back → Back → Menu
+func TestIntegrationFullNavigationFlowMenuToProgDetailAndBack(t *testing.T) {
+	// Create mock services with test data
+	mockProgSvc := &mockProgService{
+		programs: []ProgramInfo{
+			{ID: 1, Name: "test_prog", Type: "kprobe", Tag: "abc123", MapIDs: []uint32{10, 20}},
+		},
+	}
+
+	m := NewModel(mockProgSvc, nil)
+
+	// Verify starting at Menu
+	if m.state != ViewMenu {
+		t.Fatalf("expected ViewMenu, got %v", m.state)
+	}
+
+	// Navigate to Programs list (Enter on first item)
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ := m.Update(enterMsg)
+	m = result.(Model)
+
+	// Verify at ProgList
+	if m.state != ViewProgList {
+		t.Fatalf("expected ViewProgList, got %v", m.state)
+	}
+
+	// Select the program to go to ProgDetail
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Verify at ProgDetail
+	if m.state != ViewProgDetail {
+		t.Fatalf("expected ViewProgDetail, got %v", m.state)
+	}
+
+	// Verify program details are displayed
+	view := m.View()
+	if !containsString(view, "test_prog") {
+		t.Error("program detail should display program name")
+	}
+	if !containsString(view, "kprobe") {
+		t.Error("program detail should display program type")
+	}
+
+	// Navigate back to ProgList
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	if m.state != ViewProgList {
+		t.Fatalf("expected ViewProgList after back, got %v", m.state)
+	}
+
+	// Navigate back to Menu
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	if m.state != ViewMenu {
+		t.Fatalf("expected ViewMenu after back, got %v", m.state)
+	}
+}
+
+// TestIntegrationProgDetailToMapDetailAndBack tests navigation from
+// ProgDetail → MapDetail (via associated map) → Back to ProgDetail
+func TestIntegrationProgDetailToMapDetailAndBack(t *testing.T) {
+	// Create mock services with test data
+	mockProgSvc := &mockProgService{
+		programs: []ProgramInfo{
+			{ID: 1, Name: "test_prog", Type: "kprobe", Tag: "abc123", MapIDs: []uint32{10}},
+		},
+	}
+	mockMapsSvc := &mockMapsServiceWithDump{
+		maps: []MapInfo{
+			{ID: 10, Name: "associated_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		},
+	}
+
+	m := NewModel(mockProgSvc, mockMapsSvc)
+
+	// Navigate: Menu → ProgList → ProgDetail
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ := m.Update(enterMsg) // Menu → ProgList
+	m = result.(Model)
+
+	result, _ = m.Update(enterMsg) // ProgList → ProgDetail
+	m = result.(Model)
+
+	// Verify at ProgDetail
+	if m.state != ViewProgDetail {
+		t.Fatalf("expected ViewProgDetail, got %v", m.state)
+	}
+
+	// Verify associated maps are shown
+	view := m.View()
+	if !containsString(view, "Map ID: 10") {
+		t.Error("program detail should display associated map ID")
+	}
+
+	// Select the associated map to navigate to MapDetail
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Verify at MapDetail
+	if m.state != ViewMapDetail {
+		t.Fatalf("expected ViewMapDetail, got %v", m.state)
+	}
+
+	// Verify map details are displayed
+	view = m.View()
+	if !containsString(view, "associated_map") {
+		t.Error("map detail should display map name")
+	}
+
+	// Navigate back - should return to ProgDetail, NOT MapList
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	if m.state != ViewProgDetail {
+		t.Fatalf("expected ViewProgDetail after back from MapDetail, got %v", m.state)
+	}
+
+	// Verify we're back at the program detail
+	view = m.View()
+	if !containsString(view, "test_prog") {
+		t.Error("should be back at program detail showing test_prog")
+	}
+}
+
+// TestIntegrationProgDetailToMapDetailToDumpAndBack tests the full navigation:
+// ProgDetail → MapDetail → MapDump → Back → Back → ProgDetail
+func TestIntegrationProgDetailToMapDetailToDumpAndBack(t *testing.T) {
+	// Create mock services with test data
+	mockProgSvc := &mockProgService{
+		programs: []ProgramInfo{
+			{ID: 1, Name: "test_prog", Type: "kprobe", Tag: "abc123", MapIDs: []uint32{10}},
+		},
+	}
+	mockMapsSvc := &mockMapsServiceWithDump{
+		maps: []MapInfo{
+			{ID: 10, Name: "associated_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		},
+		entries: []MapEntry{
+			{Key: []byte{0xde, 0xad}, Value: []byte{0xbe, 0xef}},
+		},
+	}
+
+	m := NewModel(mockProgSvc, mockMapsSvc)
+
+	// Navigate: Menu → ProgList → ProgDetail → MapDetail → MapDump
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ := m.Update(enterMsg) // Menu → ProgList
+	m = result.(Model)
+
+	result, _ = m.Update(enterMsg) // ProgList → ProgDetail
+	m = result.(Model)
+
+	result, _ = m.Update(enterMsg) // ProgDetail → MapDetail (via associated map)
+	m = result.(Model)
+
+	result, _ = m.Update(enterMsg) // MapDetail → MapDump
+	m = result.(Model)
+
+	// Verify at MapDump
+	if m.state != ViewMapDump {
+		t.Fatalf("expected ViewMapDump, got %v", m.state)
+	}
+
+	// Verify dump content
+	view := m.View()
+	if !containsString(view, "de ad") {
+		t.Error("map dump should display key")
+	}
+	if !containsString(view, "be ef") {
+		t.Error("map dump should display value")
+	}
+
+	// Navigate back: MapDump → MapDetail
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	if m.state != ViewMapDetail {
+		t.Fatalf("expected ViewMapDetail, got %v", m.state)
+	}
+
+	// Navigate back: MapDetail → ProgDetail
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	if m.state != ViewProgDetail {
+		t.Fatalf("expected ViewProgDetail, got %v", m.state)
+	}
+
+	// Verify we're back at program detail
+	view = m.View()
+	if !containsString(view, "test_prog") {
+		t.Error("should be back at program detail")
+	}
+}
+
+// ============================================================================
+// Integration Tests for Terminal Resize Handling
+// ============================================================================
+
+// TestTerminalResizeHandling tests that all components handle window resize correctly.
+func TestTerminalResizeHandling(t *testing.T) {
+	m := NewModel(nil, nil)
+
+	// Initial size
+	initialWidth, initialHeight := 80, 24
+	msg := tea.WindowSizeMsg{Width: initialWidth, Height: initialHeight}
+	result, _ := m.Update(msg)
+	m = result.(Model)
+
+	if m.width != initialWidth || m.height != initialHeight {
+		t.Errorf("initial size = (%d, %d), want (%d, %d)", m.width, m.height, initialWidth, initialHeight)
+	}
+
+	// Resize to larger
+	newWidth, newHeight := 120, 40
+	msg = tea.WindowSizeMsg{Width: newWidth, Height: newHeight}
+	result, _ = m.Update(msg)
+	m = result.(Model)
+
+	if m.width != newWidth || m.height != newHeight {
+		t.Errorf("after resize = (%d, %d), want (%d, %d)", m.width, m.height, newWidth, newHeight)
+	}
+
+	// Resize to smaller
+	smallWidth, smallHeight := 40, 10
+	msg = tea.WindowSizeMsg{Width: smallWidth, Height: smallHeight}
+	result, _ = m.Update(msg)
+	m = result.(Model)
+
+	if m.width != smallWidth || m.height != smallHeight {
+		t.Errorf("after small resize = (%d, %d), want (%d, %d)", m.width, m.height, smallWidth, smallHeight)
+	}
+
+	// View should still render without crashing
+	view := m.View()
+	if view == "" {
+		t.Error("View() should not return empty string after resize")
+	}
+}
+
+// TestTerminalResizeInEachView tests resize handling in each view state.
+func TestTerminalResizeInEachView(t *testing.T) {
+	states := []ViewState{
+		ViewMenu,
+		ViewProgList,
+		ViewProgDetail,
+		ViewMapList,
+		ViewMapDetail,
+		ViewMapDump,
+	}
+
+	for _, state := range states {
+		t.Run(state.String(), func(t *testing.T) {
+			m := NewModel(nil, nil)
+			m.state = state
+
+			// Apply resize
+			msg := tea.WindowSizeMsg{Width: 100, Height: 30}
+			result, _ := m.Update(msg)
+			m = result.(Model)
+
+			// Verify dimensions updated
+			if m.width != 100 || m.height != 30 {
+				t.Errorf("size = (%d, %d), want (100, 30)", m.width, m.height)
+			}
+
+			// View should render without crashing
+			view := m.View()
+			if view == "" {
+				t.Errorf("View() for %v should not return empty string after resize", state)
+			}
+		})
+	}
+}
+
+// TestTerminalResizeWithData tests resize handling when views have data loaded.
+func TestTerminalResizeWithData(t *testing.T) {
+	// Create mock services with test data
+	mockProgSvc := &mockProgService{
+		programs: []ProgramInfo{
+			{ID: 1, Name: "prog1", Type: "kprobe", Tag: "abc"},
+			{ID: 2, Name: "prog2", Type: "tracepoint", Tag: "def"},
+		},
+	}
+	mockMapsSvc := &mockMapsServiceWithDump{
+		maps: []MapInfo{
+			{ID: 1, Name: "map1", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		},
+		entries: []MapEntry{
+			{Key: []byte{0x01}, Value: []byte{0x02}},
+		},
+	}
+
+	m := NewModel(mockProgSvc, mockMapsSvc)
+
+	// Navigate to ProgList and load data
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ := m.Update(enterMsg)
+	m = result.(Model)
+
+	// Resize while viewing list
+	msg := tea.WindowSizeMsg{Width: 150, Height: 50}
+	result, _ = m.Update(msg)
+	m = result.(Model)
+
+	// View should still show data correctly
+	view := m.View()
+	if !containsString(view, "prog1") {
+		t.Error("list should still show data after resize")
+	}
+
+	// Navigate to detail and resize again
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	msg = tea.WindowSizeMsg{Width: 80, Height: 24}
+	result, _ = m.Update(msg)
+	m = result.(Model)
+
+	view = m.View()
+	if !containsString(view, "prog1") {
+		t.Error("detail should still show data after resize")
+	}
+}
+
+// TestTerminalResizeMinimumSize tests handling of very small terminal sizes.
+func TestTerminalResizeMinimumSize(t *testing.T) {
+	m := NewModel(nil, nil)
+
+	// Very small size
+	msg := tea.WindowSizeMsg{Width: 10, Height: 5}
+	result, _ := m.Update(msg)
+	m = result.(Model)
+
+	// Should not crash
+	view := m.View()
+	if view == "" {
+		t.Error("View() should handle minimum size gracefully")
+	}
+}
+
+// TestTerminalResizeDuringNavigation tests resize during navigation transitions.
+func TestTerminalResizeDuringNavigation(t *testing.T) {
+	mockMapsSvc := &mockMapsServiceWithDump{
+		maps: []MapInfo{
+			{ID: 1, Name: "test_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		},
+	}
+
+	m := NewModel(nil, mockMapsSvc)
+
+	// Navigate to maps list
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	result, _ := m.Update(downMsg)
+	m = result.(Model)
+
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Resize
+	msg := tea.WindowSizeMsg{Width: 120, Height: 40}
+	result, _ = m.Update(msg)
+	m = result.(Model)
+
+	// Continue navigation
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Resize again
+	msg = tea.WindowSizeMsg{Width: 80, Height: 24}
+	result, _ = m.Update(msg)
+	m = result.(Model)
+
+	// Should be at MapDetail with correct size
+	if m.state != ViewMapDetail {
+		t.Fatalf("expected ViewMapDetail, got %v", m.state)
+	}
+	if m.width != 80 || m.height != 24 {
+		t.Errorf("size = (%d, %d), want (80, 24)", m.width, m.height)
+	}
+
+	// View should render correctly
+	view := m.View()
+	if !containsString(view, "test_map") {
+		t.Error("view should display map name after resize during navigation")
+	}
+}
+
+// ============================================================================
+// Integration Tests for Backspace Navigation
+// ============================================================================
+
+// TestBackspaceNavigationEquivalentToEscape tests that backspace works like escape.
+func TestBackspaceNavigationEquivalentToEscape(t *testing.T) {
+	m := NewModel(nil, nil)
+
+	// Navigate to ProgList
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ := m.Update(enterMsg)
+	m = result.(Model)
+
+	if m.state != ViewProgList {
+		t.Fatalf("expected ViewProgList, got %v", m.state)
+	}
+
+	// Use backspace to go back
+	backspaceMsg := tea.KeyMsg{Type: tea.KeyBackspace}
+	result, _ = m.Update(backspaceMsg)
+	m = result.(Model)
+
+	if m.state != ViewMenu {
+		t.Errorf("expected ViewMenu after backspace, got %v", m.state)
+	}
+}

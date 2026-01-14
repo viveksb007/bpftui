@@ -123,7 +123,7 @@
   - Write integration tests for error scenarios
   - _Requirements: 1.3, 6.4, 6.5_
 
-- [ ] 12. Final integration and polish
+- [x] 12. Final integration and polish
   - Wire all components together in root model Update() switch
   - Test full navigation flow: Menu → List → Detail → Dump → Back
   - Test navigation from ProgDetail → MapDetail → Back to ProgDetail
