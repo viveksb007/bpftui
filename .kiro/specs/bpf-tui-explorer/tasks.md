@@ -116,7 +116,7 @@
   - Write unit tests for help rendering
   - _Requirements: 8.1, 8.2, 8.3, 8.4_
 
-- [ ] 11. Add error handling and empty states
+- [x] 11. Add error handling and empty states
   - Implement permission error handling with clear message on startup
   - Add empty state messages for programs list, maps list, and map dump
   - Display inline errors using errorStyle without crashing

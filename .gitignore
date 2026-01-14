@@ -1,0 +1,8 @@
+# Binaries
+main
+bpftui
+*.exe
+
+# IDE
+.idea/
+.vscode/

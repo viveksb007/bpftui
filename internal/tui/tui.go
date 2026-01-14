@@ -451,7 +451,13 @@ func (m Model) View() string {
 
 // renderError displays an error message.
 func (m Model) renderError() string {
-	return errorStyle.Render(fmt.Sprintf("Error: %v\n\nPress 'q' to quit.", m.err))
+	var errMsg string
+	if IsPermissionError(m.err) {
+		errMsg = fmt.Sprintf("⚠️  Permission Error\n\n%v\n\nTry running with sudo or as root.\n\nPress 'q' to quit.", m.err)
+	} else {
+		errMsg = fmt.Sprintf("Error: %v\n\nPress 'q' to quit.", m.err)
+	}
+	return errorStyle.Render(errMsg)
 }
 
 // renderHelp displays the help overlay with context-appropriate shortcuts.

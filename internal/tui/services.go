@@ -1,5 +1,7 @@
 package tui
 
+import "errors"
+
 // ProgramInfo represents information about a BPF program.
 // This mirrors the structure from gobpftool's prog.ProgramInfo.
 type ProgramInfo struct {
@@ -59,7 +61,7 @@ func (e *PermissionError) Error() string {
 	if e.Err != nil {
 		return "insufficient permissions: " + e.Err.Error()
 	}
-	return "insufficient permissions - try running with sudo"
+	return "insufficient permissions"
 }
 
 func (e *PermissionError) Unwrap() error {
@@ -68,6 +70,6 @@ func (e *PermissionError) Unwrap() error {
 
 // IsPermissionError checks if an error is a permission error.
 func IsPermissionError(err error) bool {
-	_, ok := err.(*PermissionError)
-	return ok
+	var permErr *PermissionError
+	return errors.As(err, &permErr)
 }

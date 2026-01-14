@@ -546,9 +546,10 @@ func TestPermissionError(t *testing.T) {
 	innerErr := errors.New("operation not permitted")
 	permErr := &PermissionError{Err: innerErr}
 
-	if permErr.Error() != "insufficient permissions: operation not permitted" {
+	expectedMsg := "insufficient permissions: operation not permitted"
+	if permErr.Error() != expectedMsg {
 		t.Errorf("PermissionError.Error() = %q, want %q",
-			permErr.Error(), "insufficient permissions: operation not permitted")
+			permErr.Error(), expectedMsg)
 	}
 
 	if permErr.Unwrap() != innerErr {
@@ -557,8 +558,9 @@ func TestPermissionError(t *testing.T) {
 
 	// Test PermissionError without wrapped error
 	permErr2 := &PermissionError{}
-	if permErr2.Error() != "insufficient permissions - try running with sudo" {
-		t.Errorf("PermissionError.Error() without inner = %q", permErr2.Error())
+	expectedMsg2 := "insufficient permissions"
+	if permErr2.Error() != expectedMsg2 {
+		t.Errorf("PermissionError.Error() without inner = %q, want %q", permErr2.Error(), expectedMsg2)
 	}
 }
 
@@ -588,4 +590,378 @@ func containsSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// ============================================================================
+// Integration Tests for Error Scenarios
+// ============================================================================
+
+// TestIntegrationPermissionErrorOnStartup tests that permission errors are
+// displayed gracefully on startup without crashing.
+func TestIntegrationPermissionErrorOnStartup(t *testing.T) {
+	// Create a mock service that returns a permission error
+	mockSvc := &mockProgService{
+		err: &PermissionError{Err: errors.New("operation not permitted")},
+	}
+
+	m := NewModel(mockSvc, nil)
+
+	// Check permissions should set the error
+	err := m.checkPermissions()
+	if err == nil {
+		t.Fatal("expected permission error")
+	}
+
+	// Set the error on the model (as RunWithServices does)
+	m.err = err
+
+	// View should render the error gracefully
+	view := m.View()
+
+	if view == "" {
+		t.Error("View() should not return empty string for permission error")
+	}
+
+	// Should contain permission-related message
+	if !containsString(view, "Permission Error") {
+		t.Error("view should contain 'Permission Error'")
+	}
+
+	// Should contain sudo suggestion
+	if !containsString(view, "sudo") {
+		t.Error("view should contain 'sudo' suggestion")
+	}
+
+	// Should contain quit instruction
+	if !containsString(view, "quit") {
+		t.Error("view should contain quit instruction")
+	}
+}
+
+// TestIntegrationErrorInProgListDoesNotCrash tests that errors in the programs
+// list are displayed inline without crashing.
+func TestIntegrationErrorInProgListDoesNotCrash(t *testing.T) {
+	// Create a mock service that returns an error on List
+	mockSvc := &mockProgService{
+		err: errors.New("failed to read BPF programs"),
+	}
+
+	m := NewModel(mockSvc, nil)
+
+	// Navigate to programs list
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ := m.Update(enterMsg)
+	m = result.(Model)
+
+	// Should be at programs list
+	if m.state != ViewProgList {
+		t.Fatalf("expected ViewProgList, got %v", m.state)
+	}
+
+	// View should render without crashing
+	view := m.View()
+
+	if view == "" {
+		t.Error("View() should not return empty string")
+	}
+
+	// Should contain error message
+	if !containsString(view, "Error") {
+		t.Error("view should contain error message")
+	}
+
+	// Should still be able to navigate back
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	if m.state != ViewMenu {
+		t.Errorf("expected ViewMenu after back, got %v", m.state)
+	}
+}
+
+// TestIntegrationErrorInMapListDoesNotCrash tests that errors in the maps
+// list are displayed inline without crashing.
+func TestIntegrationErrorInMapListDoesNotCrash(t *testing.T) {
+	// Create a mock service that returns an error on List
+	mockMapsSvc := &mockMapsService{
+		err: errors.New("failed to read BPF maps"),
+	}
+
+	m := NewModel(nil, mockMapsSvc)
+
+	// Navigate to maps list (down to select Maps, then Enter)
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	result, _ := m.Update(downMsg)
+	m = result.(Model)
+
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Should be at maps list
+	if m.state != ViewMapList {
+		t.Fatalf("expected ViewMapList, got %v", m.state)
+	}
+
+	// View should render without crashing
+	view := m.View()
+
+	if view == "" {
+		t.Error("View() should not return empty string")
+	}
+
+	// Should contain error message
+	if !containsString(view, "Error") {
+		t.Error("view should contain error message")
+	}
+
+	// Should still be able to navigate back
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	if m.state != ViewMenu {
+		t.Errorf("expected ViewMenu after back, got %v", m.state)
+	}
+}
+
+// TestIntegrationEmptyProgramsList tests that an empty programs list
+// displays the appropriate message.
+func TestIntegrationEmptyProgramsList(t *testing.T) {
+	// Create a mock service that returns empty list
+	mockSvc := &mockProgService{
+		programs: []ProgramInfo{},
+	}
+
+	m := NewModel(mockSvc, nil)
+
+	// Navigate to programs list
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ := m.Update(enterMsg)
+	m = result.(Model)
+
+	// View should show empty state message
+	view := m.View()
+
+	if !containsString(view, "No BPF programs loaded") {
+		t.Error("view should contain empty state message for programs")
+	}
+}
+
+// TestIntegrationEmptyMapsList tests that an empty maps list
+// displays the appropriate message.
+func TestIntegrationEmptyMapsList(t *testing.T) {
+	// Create a mock service that returns empty list
+	mockMapsSvc := &mockMapsService{
+		maps: []MapInfo{},
+	}
+
+	m := NewModel(nil, mockMapsSvc)
+
+	// Navigate to maps list
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	result, _ := m.Update(downMsg)
+	m = result.(Model)
+
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// View should show empty state message
+	view := m.View()
+
+	if !containsString(view, "No BPF maps loaded") {
+		t.Error("view should contain empty state message for maps")
+	}
+}
+
+// TestIntegrationEmptyMapDump tests that an empty map dump
+// displays the appropriate message.
+func TestIntegrationEmptyMapDump(t *testing.T) {
+	// Create mock services
+	mockMapsSvc := &mockMapsServiceWithDump{
+		maps: []MapInfo{
+			{ID: 1, Name: "empty_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		},
+		entries: []MapEntry{}, // Empty entries
+	}
+
+	m := NewModel(nil, mockMapsSvc)
+
+	// Navigate to maps list
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	result, _ := m.Update(downMsg)
+	m = result.(Model)
+
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Select the map
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Should be at map detail
+	if m.state != ViewMapDetail {
+		t.Fatalf("expected ViewMapDetail, got %v", m.state)
+	}
+
+	// Navigate to dump
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Should be at map dump
+	if m.state != ViewMapDump {
+		t.Fatalf("expected ViewMapDump, got %v", m.state)
+	}
+
+	// View should show empty state message
+	view := m.View()
+
+	if !containsString(view, "Map contains no entries") {
+		t.Error("view should contain empty state message for map dump")
+	}
+}
+
+// TestIntegrationErrorInMapDumpDoesNotCrash tests that errors during map dump
+// are displayed inline without crashing.
+func TestIntegrationErrorInMapDumpDoesNotCrash(t *testing.T) {
+	// Create mock services where dump fails
+	mockMapsSvc := &mockMapsServiceWithDump{
+		maps: []MapInfo{
+			{ID: 1, Name: "test_map", Type: "hash", KeySize: 4, ValueSize: 8, MaxEntries: 100},
+		},
+		dumpErr: errors.New("failed to dump map contents"),
+	}
+
+	m := NewModel(nil, mockMapsSvc)
+
+	// Navigate to maps list
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	result, _ := m.Update(downMsg)
+	m = result.(Model)
+
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Select the map
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Navigate to dump
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// Should be at map dump
+	if m.state != ViewMapDump {
+		t.Fatalf("expected ViewMapDump, got %v", m.state)
+	}
+
+	// View should render without crashing
+	view := m.View()
+
+	if view == "" {
+		t.Error("View() should not return empty string")
+	}
+
+	// Should contain error message
+	if !containsString(view, "Error") {
+		t.Error("view should contain error message")
+	}
+
+	// Should still be able to navigate back
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	if m.state != ViewMapDetail {
+		t.Errorf("expected ViewMapDetail after back, got %v", m.state)
+	}
+}
+
+// TestIntegrationErrorClearedOnNavigation tests that errors are cleared
+// when navigating back.
+func TestIntegrationErrorClearedOnNavigation(t *testing.T) {
+	m := NewModel(nil, nil)
+
+	// Set an error
+	m.err = errors.New("test error")
+
+	// Navigate to programs list (this should clear the error)
+	m.pushState(ViewProgList)
+
+	// Press back
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	result, _ := m.Update(escMsg)
+	m = result.(Model)
+
+	// Error should be cleared
+	if m.err != nil {
+		t.Error("error should be cleared after navigating back")
+	}
+}
+
+// TestIntegrationNilServicesDoNotCrash tests that nil services are handled
+// gracefully without crashing.
+func TestIntegrationNilServicesDoNotCrash(t *testing.T) {
+	m := NewModel(nil, nil)
+
+	// Navigate to programs list
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	result, _ := m.Update(enterMsg)
+	m = result.(Model)
+
+	// View should render without crashing
+	view := m.View()
+	if view == "" {
+		t.Error("View() should not return empty string with nil services")
+	}
+
+	// Navigate back
+	escMsg := tea.KeyMsg{Type: tea.KeyEsc}
+	result, _ = m.Update(escMsg)
+	m = result.(Model)
+
+	// Navigate to maps list
+	downMsg := tea.KeyMsg{Type: tea.KeyDown}
+	result, _ = m.Update(downMsg)
+	m = result.(Model)
+
+	result, _ = m.Update(enterMsg)
+	m = result.(Model)
+
+	// View should render without crashing
+	view = m.View()
+	if view == "" {
+		t.Error("View() should not return empty string with nil services")
+	}
+}
+
+// mockMapsServiceWithDump is a mock that supports configurable dump behavior.
+type mockMapsServiceWithDump struct {
+	maps    []MapInfo
+	entries []MapEntry
+	dumpErr error
+}
+
+func (m *mockMapsServiceWithDump) List() ([]MapInfo, error) {
+	return m.maps, nil
+}
+
+func (m *mockMapsServiceWithDump) Get(id uint32) (*MapInfo, error) {
+	for _, mp := range m.maps {
+		if mp.ID == id {
+			return &mp, nil
+		}
+	}
+	return nil, errors.New("map not found")
+}
+
+func (m *mockMapsServiceWithDump) Dump(id uint32) ([]MapEntry, error) {
+	if m.dumpErr != nil {
+		return nil, m.dumpErr
+	}
+	return m.entries, nil
 }
