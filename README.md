@@ -2,7 +2,7 @@
 
 An interactive Terminal User Interface (TUI) for exploring BPF programs and maps. Built with [Bubbletea](https://github.com/charmbracelet/bubbletea) and powered by [gobpftool](https://github.com/viveksb007/gobpftool).
 
-![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)
+[![Build](https://github.com/viveksb007/bpftui/actions/workflows/build.yml/badge.svg)](https://github.com/viveksb007/bpftui/actions/workflows/build.yml)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 
 ## Features
