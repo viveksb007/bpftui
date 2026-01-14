@@ -29,4 +29,13 @@ var (
 	// dimStyle is used for less important text.
 	dimStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("240"))
+
+	// labelStyle is used for field labels in detail views.
+	labelStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("245")).
+			Width(13)
+
+	// valueStyle is used for field values in detail views.
+	valueStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("252"))
 )

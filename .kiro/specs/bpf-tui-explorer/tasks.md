@@ -47,7 +47,7 @@
     - Write unit tests for list navigation
     - _Requirements: 2.3, 2.4, 2.5, 2.6_
 
-- [ ] 5. Implement program detail component
+- [x] 5. Implement program detail component
   - Implement `progdetail.go` with progDetailModel using Bubbles viewport.Model
   - Display all ProgramInfo fields (ID, Type, Name, Tag, GPL, LoadedAt, UID, BytesXlated, BytesJIT, MemLock)
   - Display associated MapIDs as selectable list
@@ -57,14 +57,14 @@
   - Write unit tests for detail rendering and map navigation
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-- [ ] 6. Implement maps list component
-  - [ ] 6.1 Create maps list model
+- [x] 6. Implement maps list component
+  - [x] 6.1 Create maps list model
     - Implement `maplist.go` with mapListModel using Bubbles list.Model
     - Create mapItem struct implementing list.Item interface
     - Display ID, Name, Type, KeySize, ValueSize, MaxEntries for each map
     - _Requirements: 4.1, 4.2_
 
-  - [ ] 6.2 Add navigation and scrolling
+  - [x] 6.2 Add navigation and scrolling
     - Implement keyboard navigation (arrow keys, j/k)
     - Enable scrolling when list exceeds terminal height
     - Handle Enter to navigate to MapDetail
@@ -72,7 +72,7 @@
     - Write unit tests for list navigation
     - _Requirements: 4.3, 4.4, 4.5, 4.6_
 
-- [ ] 7. Implement map detail component
+- [x] 7. Implement map detail component
   - Implement `mapdetail.go` with mapDetailModel using Bubbles viewport.Model
   - Display all MapInfo fields (ID, Type, Name, KeySize, ValueSize, MaxEntries, Flags, MemLock, LoadedAt, UID)
   - Add "Dump Contents" action option
@@ -81,7 +81,7 @@
   - Write unit tests for detail rendering
   - _Requirements: 5.1, 5.2, 5.3_
 
-- [ ] 8. Implement map dump component
+- [x] 8. Implement map dump component
   - Implement `mapdump.go` with mapDumpModel using Bubbles viewport.Model
   - Fetch map entries using maps.Service
   - Display key-value pairs in hexadecimal format
