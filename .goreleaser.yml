@@ -1,0 +1,51 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: bpftui
+    main: .
+    binary: bpftui
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}}
+
+archives:
+  - id: bpftui
+    formats:
+      - tar.gz
+    name_template: "bpftui_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+brews:
+  - name: bpftui
+    repository:
+      owner: viveksb007
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/viveksb007/bpftui"
+    description: "An interactive Terminal User Interface (TUI) for exploring BPF programs and maps"
+    license: "MIT"
+    install: |
+      bin.install "bpftui"
+    test: |
+      system "#{bin}/bpftui", "--version"
