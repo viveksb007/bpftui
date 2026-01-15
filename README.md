@@ -5,6 +5,8 @@ An interactive Terminal User Interface (TUI) for exploring BPF programs and maps
 [![Build](https://github.com/viveksb007/bpftui/actions/workflows/build.yml/badge.svg)](https://github.com/viveksb007/bpftui/actions/workflows/build.yml)
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
 
+![Demo](assets/demo.gif)
+
 ## Features
 
 - Browse loaded BPF programs and maps
