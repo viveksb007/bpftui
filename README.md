@@ -16,6 +16,13 @@ An interactive Terminal User Interface (TUI) for exploring BPF programs and maps
 
 ## Installation
 
+### Homebrew (Linux)
+
+```bash
+brew tap viveksb007/tap
+brew install bpftui
+```
+
 ### From Source
 
 ```bash
@@ -25,7 +32,6 @@ cd bpftui
 
 # Build
 go build -o bpftui .
-
 ```
 
 ### Requirements
