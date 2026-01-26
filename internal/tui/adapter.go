@@ -36,6 +36,8 @@ func (a *ProgServiceAdapter) List() ([]ProgramInfo, error) {
 			BytesJIT:    p.BytesJIT,
 			MemLock:     p.MemLock,
 			MapIDs:      p.MapIDs,
+			Pinned:      len(p.PinnedPaths) > 0,
+			PinnedPaths: p.PinnedPaths,
 		}
 	}
 	return result, nil
@@ -60,6 +62,8 @@ func (a *ProgServiceAdapter) Get(id uint32) (*ProgramInfo, error) {
 		BytesJIT:    p.BytesJIT,
 		MemLock:     p.MemLock,
 		MapIDs:      p.MapIDs,
+		Pinned:      len(p.PinnedPaths) > 0,
+		PinnedPaths: p.PinnedPaths,
 	}, nil
 }
 
@@ -83,16 +87,18 @@ func (a *MapsServiceAdapter) List() ([]MapInfo, error) {
 	result := make([]MapInfo, len(mapList))
 	for i, m := range mapList {
 		result[i] = MapInfo{
-			ID:         m.ID,
-			Type:       m.Type,
-			Name:       m.Name,
-			KeySize:    m.KeySize,
-			ValueSize:  m.ValueSize,
-			MaxEntries: m.MaxEntries,
-			Flags:      m.Flags,
-			MemLock:    m.MemLock,
-			LoadedAt:   m.LoadedAt.Format("2006-01-02 15:04:05"),
-			UID:        m.UID,
+			ID:          m.ID,
+			Type:        m.Type,
+			Name:        m.Name,
+			KeySize:     m.KeySize,
+			ValueSize:   m.ValueSize,
+			MaxEntries:  m.MaxEntries,
+			Flags:       m.Flags,
+			MemLock:     m.MemLock,
+			LoadedAt:    m.LoadedAt.Format("2006-01-02 15:04:05"),
+			UID:         m.UID,
+			Pinned:      len(m.PinnedPaths) > 0,
+			PinnedPaths: m.PinnedPaths,
 		}
 	}
 	return result, nil
@@ -106,16 +112,18 @@ func (a *MapsServiceAdapter) Get(id uint32) (*MapInfo, error) {
 	}
 
 	return &MapInfo{
-		ID:         m.ID,
-		Type:       m.Type,
-		Name:       m.Name,
-		KeySize:    m.KeySize,
-		ValueSize:  m.ValueSize,
-		MaxEntries: m.MaxEntries,
-		Flags:      m.Flags,
-		MemLock:    m.MemLock,
-		LoadedAt:   m.LoadedAt.Format("2006-01-02 15:04:05"),
-		UID:        m.UID,
+		ID:          m.ID,
+		Type:        m.Type,
+		Name:        m.Name,
+		KeySize:     m.KeySize,
+		ValueSize:   m.ValueSize,
+		MaxEntries:  m.MaxEntries,
+		Flags:       m.Flags,
+		MemLock:     m.MemLock,
+		LoadedAt:    m.LoadedAt.Format("2006-01-02 15:04:05"),
+		UID:         m.UID,
+		Pinned:      len(m.PinnedPaths) > 0,
+		PinnedPaths: m.PinnedPaths,
 	}, nil
 }
 

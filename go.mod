@@ -6,7 +6,7 @@ require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/viveksb007/gobpftool v0.0.0-20260114023147-1fcb1aac24e9
+	github.com/viveksb007/gobpftool v0.1.0
 )
 
 require (

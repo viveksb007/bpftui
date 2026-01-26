@@ -112,6 +112,21 @@ func (m *mapDetailModel) renderContent() string {
 	b.WriteString(valueStyle.Render(fmt.Sprintf("%d", mi.UID)))
 	b.WriteString("\n")
 
+	// Pinned status section
+	b.WriteString(labelStyle.Render("Pinned:      "))
+	if mi.Pinned {
+		b.WriteString(valueStyle.Render("Yes"))
+		b.WriteString("\n")
+		for _, path := range mi.PinnedPaths {
+			b.WriteString(labelStyle.Render("  Path:      "))
+			b.WriteString(valueStyle.Render(path))
+			b.WriteString("\n")
+		}
+	} else {
+		b.WriteString(dimStyle.Render("No"))
+		b.WriteString("\n")
+	}
+
 	// Actions section
 	b.WriteString("\n")
 	b.WriteString(titleStyle.Render("Actions"))

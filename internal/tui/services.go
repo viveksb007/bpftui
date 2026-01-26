@@ -16,21 +16,25 @@ type ProgramInfo struct {
 	BytesJIT    uint32
 	MemLock     uint32
 	MapIDs      []uint32
+	Pinned      bool     // Whether the program is pinned
+	PinnedPaths []string // Paths where the program is pinned
 }
 
 // MapInfo represents information about a BPF map.
 // This mirrors the structure from gobpftool's maps.MapInfo.
 type MapInfo struct {
-	ID         uint32
-	Type       string
-	Name       string
-	KeySize    uint32
-	ValueSize  uint32
-	MaxEntries uint32
-	Flags      uint32
-	MemLock    uint32
-	LoadedAt   string
-	UID        uint32
+	ID          uint32
+	Type        string
+	Name        string
+	KeySize     uint32
+	ValueSize   uint32
+	MaxEntries  uint32
+	Flags       uint32
+	MemLock     uint32
+	LoadedAt    string
+	UID         uint32
+	Pinned      bool     // Whether the map is pinned
+	PinnedPaths []string // Paths where the map is pinned
 }
 
 // MapEntry represents a key-value entry in a BPF map.

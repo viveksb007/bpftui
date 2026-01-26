@@ -101,16 +101,18 @@ func TestMapDetailModel_ViewRendersAllFields(t *testing.T) {
 	m := newMapDetailModel(80, 24)
 
 	mapInfo := &MapInfo{
-		ID:         42,
-		Name:       "my_bpf_map",
-		Type:       "hash",
-		KeySize:    8,
-		ValueSize:  16,
-		MaxEntries: 2048,
-		Flags:      1,
-		MemLock:    8192,
-		LoadedAt:   "2024-06-15 10:30:00",
-		UID:        1000,
+		ID:          42,
+		Name:        "my_bpf_map",
+		Type:        "hash",
+		KeySize:     8,
+		ValueSize:   16,
+		MaxEntries:  2048,
+		Flags:       1,
+		MemLock:     8192,
+		LoadedAt:    "2024-06-15 10:30:00",
+		UID:         1000,
+		Pinned:      true,
+		PinnedPaths: []string{"/sys/fs/bpf/my_map"},
 	}
 	m.SetMap(mapInfo)
 
@@ -128,6 +130,8 @@ func TestMapDetailModel_ViewRendersAllFields(t *testing.T) {
 		"8192",       // MemLock
 		"2024-06-15", // LoadedAt (partial)
 		"1000",       // UID
+		"Yes",        // Pinned
+		"/sys/fs/bpf/my_map", // PinnedPath
 		"Dump Contents",
 	}
 
